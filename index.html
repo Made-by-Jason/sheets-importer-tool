@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Spreadsheet Data Import Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --google-blue: #4285f4;
+      --google-red: #ea4335;
+      --google-yellow: #fbbc05;
+      --google-green: #34a853;
+    }
+    html, body { height: 100%; }
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    /* Pretty gradient background */
+    .app-bg {
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(66,133,244,0.18), transparent 60%),
+                  radial-gradient(1000px 500px at 110% 10%, rgba(52,168,83,0.18), transparent 60%),
+                  linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+    }
+    /* Smooth card hover */
+    .card { transition: transform .25s, box-shadow .25s; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,.15); }
+    /* Simple fake progress bar stripes */
+    .progress-stripes {
+      background-image: linear-gradient(45deg, rgba(255,255,255,.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.25) 50%, rgba(255,255,255,.25) 75%, transparent 75%, transparent);
+      background-size: 1rem 1rem;
+      animation: move 1s linear infinite;
+    }
+    @keyframes move {
+      to { background-position: 1rem 0; }
+    }
+    /* Hide native file input */
+    input[type="file"] { display:none; }
+    /* Subtle table scroll shadow */
+    .scroll-shadow {
+      mask-image: linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent);
+    }
+    /* Demo tag */
+    .badge-demo { background: linear-gradient(90deg, #fbbc05, #ea4335); }
+  </style>
+</head>
+<body class="app-bg text-slate-100">
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center"
+             style="background: conic-gradient(from 180deg, var(--google-blue), var(--google-green), var(--google-yellow), var(--google-red), var(--google-blue));">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+            <path d="M3 4h18v4H3zM3 10h18v4H3zM3 16h18v4H3z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-semibold tracking-tight">Spreadsheet Data Import Tool</h1>
+          <p class="text-slate-300 text-sm">Upload, preview, map columns, schedule, and track imports</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge-demo text-xs font-semibold text-white px-2 py-1 rounded">Demo</span>
+        <a href="#" id="publishInfo" class="text-slate-300 hover:text-white text-sm underline decoration-dotted">Note: no external connections</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Sidebar -->
+    <aside class="lg:col-span-3">
+      <div class="card bg-slate-900/40 backdrop-blur border border-slate-800 rounded-2xl p-4">
+        <nav class="space-y-1" id="sidebarMenu">
+          <button data-section="dashboard" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 aria-selected:bg-sky-600 aria-selected:text-white"
+                  aria-selected="true">
+            <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+            <span class="text-sm font-medium">Dashboard</span>
+          </button>
+          <button data-section="imports" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="text-sm font-medium">New Import</span>
+          </button>
+          <button data-section="schedules" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-medium">Schedules</span>
+          </button>
+          <button data-section="history" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800">
+            <span class="w-2 h-2 rounded-full bg-fuchsia-400"></span>
+            <span class="text-sm font-medium">History</span>
+          </button>
+          <button data-section="settings" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800">
+            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span class="text-sm font-medium">Settings</span>
+          </button>
+        </nav>
+
+        <div class="mt-6 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-xs text-slate-300 leading-5">
+            Tip: You can paste data directly. Click “New Import” and choose “Paste from clipboard”.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <section class="lg:col-span-9 space-y-6">
+      <!-- Dashboard -->
+      <div id="section-dashboard" class="card bg-white/5 rounded-2xl p-6 border border-white/10">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold">Overview</h2>
+            <p class="text-slate-300 text-sm">Quick stats from your recent imports</p>
+          </div>
+          <button id="startImportFromDashboard" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white">
+            <span>+ New Import</span>
+          </button>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="text-slate-300 text-sm">Total Imports</div>
+            <div id="stat-total-imports" class="text-2xl font-semibold mt-1">0</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="text-slate-300 text-sm">Rows Processed</div>
+            <div id="stat-total-rows" class="text-2xl font-semibold mt-1">0</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="text-slate-300 text-sm">Success Rate</div>
+            <div id="stat-success-rate" class="text-2xl font-semibold mt-1">—</div>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <h3 class="text-sm font-medium text-slate-300 mb-2">Recent Activity</h3>
+          <div id="dashboardRecent" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Imports -->
+      <div id="section-imports" class="card bg-white/5 rounded-2xl p-6 border border-white/10 hidden">
+        <h2 class="text-lg font-semibold">Start a new import</h2>
+        <p class="text-slate-300 text-sm mb-4">Choose a source and get your data ready</p>
+
+        <div class="grid md:grid-cols-3 gap-4">
+          <!-- CSV Upload -->
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-sky-600">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 2H8c-1.1 0-2 .9-2 2v3H5c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h7l2-2h5c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 12h-7l-2 2H5V9h2V4h12v10z"/></svg>
+              </div>
+              <div class="font-medium">Upload CSV</div>
+            </div>
+            <p class="text-slate-300 text-sm mt-2">Import from a local CSV file</p>
+            <label for="csvFile" class="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white cursor-pointer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M5 20h14v-2H5v2zM12 2l-5.5 9h11z"/></svg>
+              <span>Choose file</span>
+            </label>
+            <input id="csvFile" type="file" accept=".csv" />
+            <button id="csvSample" class="mt-2 text-sky-400 text-sm hover:underline">Use sample CSV</button>
+          </div>
+
+          <!-- Paste Clipboard -->
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-600">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v15a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 0a1 1 0 011 1h-2a1 1 0 011-1zM5 20V5h14v15H5z"/></svg>
+              </div>
+              <div class="font-medium">Paste from clipboard</div>
+            </div>
+            <p class="text-slate-300 text-sm mt-2">Paste rows with commas or tabs</p>
+            <button id="openPaste" class="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white">
+              <span>Open paste box</span>
+            </button>
+          </div>
+
+          <!-- Google Sheets via CSV link -->
+          <div class="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 2H8c-1.1 0-2 .9-2 2v4h2V4h11v16H8v-4H6v4c0 1.1.9 2 2 2h11c1.11 0 2-.9 2-2V4c0-1.1-.89-2-2-2zM3 12l4 4V8l-4 4z"/></svg>
+              </div>
+              <div class="font-medium">Google Sheets</div>
+              <span class="ml-auto text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10">No API</span>
+            </div>
+            <p class="text-slate-300 text-sm mt-2">Paste a published CSV link from Google Sheets</p>
+            <button id="openSheetsDemo" class="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold">
+              <span>Paste link</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Pipeline Steps -->
+        <div id="pipeline" class="mt-6 hidden">
+          <ol class="grid md:grid-cols-3 gap-4">
+            <li class="rounded-xl p-4 border border-slate-800 bg-slate-900/40">
+              <div class="text-sm font-semibold">1. Preview</div>
+              <p class="text-slate-300 text-sm">Check your data sample</p>
+            </li>
+            <li class="rounded-xl p-4 border border-slate-800 bg-slate-900/40">
+              <div class="text-sm font-semibold">2. Map Columns</div>
+              <p class="text-slate-300 text-sm">Connect source to fields</p>
+            </li>
+            <li class="rounded-xl p-4 border border-slate-800 bg-slate-900/40">
+              <div class="text-sm font-semibold">3. Validate & Run</div>
+              <p class="text-slate-300 text-sm">Fix issues and import</p>
+            </li>
+          </ol>
+
+          <!-- Preview -->
+          <div class="mt-6 rounded-xl border border-slate-800 overflow-hidden">
+            <div class="flex items-center justify-between bg-slate-900/60 px-4 py-3">
+              <div class="text-sm font-medium">Data preview</div>
+              <div class="flex items-center gap-2">
+                <label class="text-sm text-slate-300">Delimiter</label>
+                <select id="delimiter" class="bg-slate-800 text-slate-100 text-sm rounded-lg px-2 py-1 border border-slate-700">
+                  <option value=",">Comma</option>
+                  <option value=";">Semicolon</option>
+                  <option value="tab">Tab</option>
+                </select>
+              </div>
+            </div>
+            <div class="max-h-56 overflow-auto scroll-shadow bg-slate-900/30">
+              <table class="min-w-full text-sm">
+                <thead class="bg-slate-900/40 sticky top-0">
+                  <tr id="previewHead"></tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Mapping -->
+          <div class="mt-6 rounded-xl border border-slate-800 overflow-hidden">
+            <div class="flex items-center justify-between bg-slate-900/60 px-4 py-3">
+              <div class="text-sm font-medium">Map columns</div>
+              <button id="autoMap" class="text-xs px-2 py-1 rounded bg-sky-600 hover:bg-sky-500">Auto-map</button>
+            </div>
+            <div id="mappingArea" class="grid md:grid-cols-2 gap-4 p-4"></div>
+          </div>
+
+          <!-- Validation + Actions -->
+          <div class="mt-6 grid md:grid-cols-3 gap-4">
+            <div class="md:col-span-2 rounded-xl border border-slate-800">
+              <div class="flex items-center justify-between bg-slate-900/60 px-4 py-3">
+                <div class="text-sm font-medium">Validation</div>
+                <button id="runValidation" class="text-xs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500">Run validation</button>
+              </div>
+              <div id="validationList" class="p-4 space-y-2 text-sm text-slate-300">
+                No checks run yet.
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-800 p-4">
+              <div class="text-sm font-semibold mb-2">Schedule</div>
+              <div class="grid grid-cols-3 gap-2">
+                <button data-sched="once" class="schedBtn px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm" aria-pressed="true">Once</button>
+                <button data-sched="daily" class="schedBtn px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Daily</button>
+                <button data-sched="weekly" class="schedBtn px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Weekly</button>
+              </div>
+              <div class="mt-3 space-y-2">
+                <label class="block text-xs text-slate-300">Start time</label>
+                <input id="schedTime" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100" />
+                <label class="block text-xs text-slate-300">Notify email (optional)</label>
+                <input id="notifyEmail" type="email" placeholder="you@example.com" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100" />
+              </div>
+              <button id="runImport" class="mt-4 w-full px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 font-semibold">Run import</button>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div id="progressWrap" class="hidden mt-6 rounded-xl border border-slate-800 overflow-hidden">
+            <div class="bg-slate-900/60 px-4 py-3 text-sm font-medium">Import progress</div>
+            <div class="p-4">
+              <div class="w-full bg-slate-800 rounded-lg overflow-hidden">
+                <div id="progressBar" class="h-3 bg-emerald-500 progress-stripes" style="width: 0%"></div>
+              </div>
+              <div id="progressText" class="text-sm text-slate-300 mt-2">Starting...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedules -->
+      <div id="section-schedules" class="card bg-white/5 rounded-2xl p-6 border border-white/10 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">Schedules</h2>
+            <p class="text-slate-300 text-sm">Planned imports</p>
+          </div>
+          <button id="addSchedule" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500">+ Add</button>
+        </div>
+        <div id="schedulesList" class="mt-4 divide-y divide-slate-800"></div>
+      </div>
+
+      <!-- History -->
+      <div id="section-history" class="card bg-white/5 rounded-2xl p-6 border border-white/10 hidden">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold">History</h2>
+            <p class="text-slate-300 text-sm">Completed and past runs</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="historyFilter" class="bg-slate-900 text-slate-100 text-sm rounded-lg px-2 py-1 border border-slate-800">
+              <option value="all">All</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+            </select>
+            <button id="clearHistory" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Clear</button>
+          </div>
+        </div>
+
+        <div class="mt-4 overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="text-slate-300">
+              <tr class="text-left">
+                <th class="py-2 pr-4 font-medium">Time</th>
+                <th class="py-2 pr-4 font-medium">Source</th>
+                <th class="py-2 pr-4 font-medium">Rows</th>
+                <th class="py-2 pr-4 font-medium">Status</th>
+                <th class="py-2 pr-4 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody id="historyTable" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="section-settings" class="card bg-white/5 rounded-2xl p-6 border border-white/10 hidden">
+        <h2 class="text-lg font-semibold">Settings</h2>
+        <div class="mt-4 grid md:grid-cols-2 gap-4">
+          <div class="rounded-xl border border-slate-800 p-4">
+            <div class="text-sm font-semibold">Default field mapping</div>
+            <p class="text-slate-300 text-sm mt-1">These help auto-map columns</p>
+            <div class="mt-3 space-y-2 text-sm">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-slate-300">Name fields</label>
+                <input id="setNameAliases" type="text" class="w-2/3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2" placeholder="name, full_name"/>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-slate-300">Email fields</label>
+                <input id="setEmailAliases" type="text" class="w-2/3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2" placeholder="email, mail"/>
+              </div>
+              <button id="saveSettings" class="mt-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm">Save</button>
+            </div>
+          </div>
+          <div class="rounded-xl border border-slate-800 p-4">
+            <div class="text-sm font-semibold">Export options</div>
+            <p class="text-slate-300 text-sm mt-1">Download preview as CSV</p>
+            <button id="downloadPreview" class="mt-3 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-sm">Download CSV</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  <!-- Paste modal -->
+  <div id="pasteModal" class="fixed inset-0 hidden z-50">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative max-w-2xl mx-auto mt-20 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="text-lg font-semibold">Paste data</div>
+          <p class="text-slate-300 text-sm">Paste rows separated by commas or tabs</p>
+        </div>
+        <button class="text-slate-300 hover:text-white" data-close="#pasteModal">✕</button>
+      </div>
+      <textarea id="pasteBox" class="mt-4 w-full h-56 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"></textarea>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700" data-close="#pasteModal">Cancel</button>
+        <button id="usePasted" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500">Use data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sheets link modal -->
+  <div id="sheetsModal" class="fixed inset-0 hidden z-50">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative max-w-2xl mx-auto mt-20 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="text-lg font-semibold">Import from Google Sheets</div>
+          <p class="text-slate-300 text-sm">Paste a published CSV link: File → Share → Publish to web → CSV</p>
+        </div>
+        <button class="text-slate-300 hover:text-white" data-close="#sheetsModal">✕</button>
+      </div>
+      <div class="mt-4 space-y-3">
+        <input id="sheetsUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
+        <div class="text-xs text-slate-400">Note: This method does not require an API key and works with public CSV links.</div>
+      </div>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700" data-close="#sheetsModal">Cancel</button>
+        <button id="useSheetsDemo" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold">Load</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 hidden">
+    <div class="rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm shadow-lg"></div>
+  </div>
+
+  <script>
+    // App state
+    const state = {
+      activeSection: 'dashboard',
+      rawText: '',
+      delimiter: ',',
+      headers: [],
+      rows: [],
+      mappings: {}, // sourceHeader -> targetField
+      targetFields: [
+        {key:'full_name', label:'Full Name', required:true},
+        {key:'email', label:'Email', required:true},
+        {key:'age', label:'Age', required:false},
+        {key:'city', label:'City', required:false}
+      ],
+      schedules: [],
+      history: [],
+      stats: { totalImports: 0, totalRows: 0, successes: 0, failures: 0 },
+      settings: {
+        nameAliases: ['name','full_name','fullname'],
+        emailAliases: ['email','mail','e-mail']
+      }
+    };
+
+    // Helpers
+    const $ = (q, root=document) => root.querySelector(q);
+    const $$ = (q, root=document) => Array.from(root.querySelectorAll(q));
+    const show = (el) => el.classList.remove('hidden');
+    const hide = (el) => el.classList.add('hidden');
+    const toast = (msg) => {
+      const t = $('#toast'); t.firstElementChild.textContent = msg; show(t);
+      setTimeout(()=>hide(t), 2000);
+    };
+
+    function setActive(section) {
+      state.activeSection = section;
+      ['dashboard','imports','schedules','history','settings'].forEach(id=>{
+        const el = $('#section-'+id);
+        if(!el) return;
+        if(id===section) show(el); else hide(el);
+      });
+      $$('#sidebarMenu button').forEach(b=>{
+        b.setAttribute('aria-selected', b.dataset.section===section ? 'true' : 'false');
+      });
+    }
+
+    // CSV parsing (simple, supports quoted cells)
+    function parseCSV(text, delimiter) {
+      const delim = delimiter === 'tab' ? '\t' : delimiter;
+      const rows = [];
+      let row = [], value = '', inQuotes = false;
+      const pushValue = () => { row.push(value); value=''; };
+
+      for (let i=0; i<text.length; i++) {
+        const c = text[i], n = text[i+1];
+        if (c === '"') {
+          if (inQuotes && n === '"') { value += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (c === '\r') {
+          // skip
+        } else if (!inQuotes && c === delim) {
+          pushValue();
+        } else if (!inQuotes && (c === '\n')) {
+          pushValue(); rows.push(row); row=[];
+        } else {
+          value += c;
+        }
+      }
+      if (value.length || row.length) { pushValue(); rows.push(row); }
+      // Trim empty lines
+      return rows.filter(r => r.some(cell => String(cell).trim() !== ''));
+    }
+
+    function renderPreview() {
+      const head = $('#previewHead'); const body = $('#previewBody');
+      head.innerHTML=''; body.innerHTML='';
+      if (!state.headers.length) return;
+      state.headers.forEach(h=>{
+        const th = document.createElement('th');
+        th.className="text-left py-2 px-3 text-slate-300";
+        th.textContent = h;
+        head.appendChild(th);
+      });
+      const sample = state.rows.slice(0, 50); // keep it light
+      sample.forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.className = "border-t border-slate-800";
+        state.headers.forEach((_,i)=>{
+          const td = document.createElement('td');
+          td.className = "py-2 px-3";
+          td.textContent = r[i] ?? '';
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+
+    function buildMappingUI() {
+      const area = $('#mappingArea'); area.innerHTML='';
+      if (!state.headers.length) { area.innerHTML = '<div class="text-sm text-slate-300">No columns to map.</div>'; return; }
+      state.targetFields.forEach(field=>{
+        const wrap = document.createElement('div');
+        wrap.className = "rounded-xl border border-slate-800 p-4 bg-slate-900/40";
+        wrap.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold">${field.label}</div>
+            ${field.required ? '<span class="text-xs text-rose-300">Required</span>': '<span class="text-xs text-slate-400">Optional</span>'}
+          </div>
+          <div class="mt-2">
+            <select data-target="${field.key}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100">
+              <option value="">— Not mapped —</option>
+              ${state.headers.map(h=>`<option value="${h}">${h}</option>`).join('')}
+            </select>
+          </div>
+        `;
+        area.appendChild(wrap);
+      });
+
+      // Prefill from state
+      $$('#mappingArea select').forEach(sel=>{
+        const key = sel.dataset.target;
+        if (state.mappings) {
+          const match = Object.entries(state.mappings).find(([src, tgt])=>tgt===key);
+          if (match) sel.value = match[0];
+        }
+        sel.addEventListener('change', (e)=>{
+          // remove previous mapping to this field
+          Object.keys(state.mappings).forEach(src=>{
+            if (state.mappings[src] === key) delete state.mappings[src];
+          });
+          if (e.target.value) state.mappings[e.target.value] = key;
+          else Object.keys(state.mappings).forEach(src=>{ if (state.mappings[src]===key) delete state.mappings[src]; });
+        });
+      });
+    }
+
+    function autoMap() {
+      const aliases = {
+        full_name: ['full name','fullname','name', ...state.settings.nameAliases],
+        email: ['email','mail','e-mail','e mail', ...state.settings.emailAliases],
+        age: ['age','years'],
+        city: ['city','town','location']
+      };
+      Object.keys(state.mappings).forEach(k=>delete state.mappings[k]);
+      state.headers.forEach(h=>{
+        const clean = h.toLowerCase().replace(/[_\-]/g,' ').trim();
+        for (const field of state.targetFields) {
+          if (aliases[field.key]?.some(a => clean === a || clean.includes(a))) {
+            if (!Object.values(state.mappings).includes(field.key)) {
+              state.mappings[h] = field.key;
+              break;
+            }
+          }
+        }
+      });
+      buildMappingUI();
+      toast('Auto-mapped based on names');
+    }
+
+    function validateData() {
+      const out = [];
+      // Required fields mapped?
+      state.targetFields.filter(f=>f.required).forEach(f=>{
+        const mapped = Object.values(state.mappings).includes(f.key);
+        out.push({type: mapped ? 'ok' : 'error', msg: mapped ? `${f.label} mapped` : `${f.label} not mapped`});
+      });
+      // Email format simple check
+      const emailSrc = Object.keys(state.mappings).find(s => state.mappings[s]==='email');
+      if (emailSrc) {
+        const idx = state.headers.indexOf(emailSrc);
+        const invalid = state.rows.filter(r => r[idx] && !/.+@.+\..+/.test(String(r[idx]))).length;
+        out.push({type: invalid ? 'warn' : 'ok', msg: invalid ? `${invalid} possible invalid emails` : 'Emails look okay'});
+      }
+      // Row count
+      out.push({type: state.rows.length ? 'ok':'error', msg: `${state.rows.length} rows detected`});
+
+      renderValidation(out);
+      return out;
+    }
+
+    function renderValidation(list) {
+      const area = $('#validationList');
+      if (!list.length) { area.textContent='No checks run yet.'; return; }
+      area.innerHTML = '';
+      list.forEach(i=>{
+        const b = document.createElement('div');
+        b.className = `flex items-center gap-2 px-3 py-2 rounded-lg border ${i.type==='ok'?'border-emerald-700 bg-emerald-900/30':'border-slate-700 bg-slate-900'}`;
+        const dot = i.type==='ok' ? 'bg-emerald-400' : (i.type==='warn' ? 'bg-amber-400':'bg-rose-400');
+        b.innerHTML = `<span class="w-2 h-2 rounded-full ${dot}"></span><span>${i.msg}</span>`;
+        area.appendChild(b);
+      });
+    }
+
+    function updateStats(success, rows) {
+      state.stats.totalImports += 1;
+      state.stats.totalRows += rows;
+      if (success) state.stats.successes += 1; else state.stats.failures += 1;
+      $('#stat-total-imports').textContent = state.stats.totalImports;
+      $('#stat-total-rows').textContent = state.stats.totalRows;
+      const total = state.stats.successes + state.stats.failures;
+      $('#stat-success-rate').textContent = total ? Math.round((state.stats.successes/total)*100)+'%' : '—';
+    }
+
+    function addHistory(entry) {
+      state.history.unshift(entry);
+      renderHistory();
+      renderDashboardRecent();
+    }
+
+    function renderHistory() {
+      const tbody = $('#historyTable'); tbody.innerHTML='';
+      const filter = $('#historyFilter').value;
+      const items = state.history.filter(h => filter==='all' ? true : h.status === filter);
+      items.forEach(h=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-2 pr-4 text-slate-300">${new Date(h.time).toLocaleString()}</td>
+          <td class="py-2 pr-4">${h.source}</td>
+          <td class="py-2 pr-4">${h.rows}</td>
+          <td class="py-2 pr-4">
+            <span class="text-xs px-2 py-1 rounded-full ${h.status==='success'?'bg-emerald-600/20 text-emerald-300 border border-emerald-700/40':'bg-rose-600/20 text-rose-300 border border-rose-700/40'}">${h.status}</span>
+          </td>
+          <td class="py-2 pr-4">
+            <button class="text-sky-400 hover:underline text-sm" data-view="${h.id}">Details</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      // details buttons
+      $$('button[data-view]').forEach(b=>{
+        b.onclick = () => {
+          alert(`Import #${b.dataset.view}\nSource: ${items.find(i=>i.id==b.dataset.view)?.source}\nRows: ${items.find(i=>i.id==b.dataset.view)?.rows}\nStatus: ${items.find(i=>i.id==b.dataset.view)?.status}`);
+        };
+      });
+    }
+
+    function renderDashboardRecent() {
+      const wrap = $('#dashboardRecent'); wrap.innerHTML='';
+      const items = state.history.slice(0,5);
+      if (!items.length) {
+        wrap.innerHTML = '<div class="text-sm text-slate-300">No activity yet.</div>'; return;
+      }
+      items.forEach(h=>{
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/40 border border-slate-800";
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="w-2 h-2 rounded-full ${h.status==='success'?'bg-emerald-400':'bg-rose-400'}"></span>
+            <div>
+              <div class="text-sm">${h.source} • ${h.rows} rows</div>
+              <div class="text-xs text-slate-400">${new Date(h.time).toLocaleString()}</div>
+            </div>
+          </div>
+          <div class="text-xs px-2 py-1 rounded bg-white/10 border border-white/10">${h.status}</div>
+        `;
+        wrap.appendChild(row);
+      });
+    }
+
+    function renderSchedules() {
+      const list = $('#schedulesList'); list.innerHTML='';
+      if (!state.schedules.length) {
+        list.innerHTML = '<div class="text-sm text-slate-300 py-6 text-center">No schedules yet.</div>'; return;
+      }
+      state.schedules.forEach((s, idx)=>{
+        const row = document.createElement('div');
+        row.className = "py-3 flex items-center justify-between";
+        row.innerHTML = `
+          <div>
+            <div class="font-medium text-sm">${s.name || 'Unnamed schedule'}</div>
+            <div class="text-xs text-slate-400">${s.type.toUpperCase()} • starts ${new Date(s.when).toLocaleString()}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs" data-run-sched="${idx}">Run now</button>
+            <button class="px-2 py-1 rounded bg-rose-700/40 hover:bg-rose-700/60 text-rose-200 text-xs" data-del-sched="${idx}">Delete</button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+      $$('button[data-del-sched]').forEach(b=>{
+        b.onclick = ()=>{ state.schedules.splice(+b.dataset.delSched,1); renderSchedules(); toast('Schedule removed'); };
+      });
+      $$( 'button[data-run-sched]').forEach(b=>{
+        b.onclick = ()=>{ toast('Schedule executed (demo)'); };
+      });
+    }
+
+    // Prepare pipeline after data is loaded
+    function preparePipeline() {
+      show($('#pipeline'));
+      renderPreview();
+      buildMappingUI();
+      setActive('imports');
+    }
+
+    // File handlers
+    $('#csvFile').addEventListener('change', (e)=>{
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.rawText = reader.result;
+        applyParsing();
+        toast('CSV loaded');
+        preparePipeline();
+      };
+      reader.readAsText(file);
+    });
+
+    // Sample CSV
+    $('#csvSample').onclick = ()=>{
+      state.rawText = 'Full Name,Email,Age,City\nAlex Rivera,alex@example.com,29,Austin\nJamie O\'Neil,jamie@example.com,31,Denver\nPat Doe,pat.doe@example,27,Seattle';
+      applyParsing(); preparePipeline(); toast('Sample CSV loaded');
+    };
+
+    // Paste modal
+    $('#openPaste').onclick = ()=>{ show($('#pasteModal')); $('#pasteBox').value=''; };
+    $('#usePasted').onclick = ()=>{
+      const text = $('#pasteBox').value.trim();
+      if (!text) return toast('Nothing pasted');
+      state.rawText = text;
+      hide($('#pasteModal')); applyParsing(); preparePipeline(); toast('Pasted data loaded');
+    };
+    $$('[data-close="#pasteModal"]').forEach(btn=>btn.onclick = ()=> hide($('#pasteModal')));
+
+    // Sheets link loader
+    $('#openSheetsDemo').onclick = ()=> show($('#sheetsModal'));
+    $('#useSheetsDemo').onclick = async ()=>{
+      const url = $('#sheetsUrl').value.trim();
+      if (!url) { toast('Please paste a CSV link'); return; }
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch');
+        const text = await res.text();
+        state.rawText = text;
+        hide($('#sheetsModal'));
+        applyParsing(); preparePipeline(); toast('Loaded from Google Sheets');
+      } catch (e) {
+        toast('Could not load the link');
+      }
+    };
+    $$('[data-close="#sheetsModal"]').forEach(btn=>btn.onclick = ()=> hide($('#sheetsModal')));
+
+    // Delimiter change
+    $('#delimiter').addEventListener('change', (e)=>{
+      state.delimiter = e.target.value;
+      if (state.rawText) { applyParsing(); renderPreview(); buildMappingUI(); }
+    });
+
+    function applyParsing() {
+      const rows = parseCSV(state.rawText, state.delimiter);
+      if (!rows.length) { state.headers=[]; state.rows=[]; return; }
+      state.headers = rows[0].map(h=>String(h).trim());
+      state.rows = rows.slice(1);
+    }
+
+    // Auto-map
+    $('#autoMap').onclick = autoMap;
+
+    // Validation
+    $('#runValidation').onclick = ()=> {
+      const res = validateData();
+      const hasError = res.some(r=>r.type==='error');
+      toast(hasError ? 'Found issues' : 'Looks good!');
+    };
+
+    // Schedule buttons
+    let currentScheduleType = 'once';
+    $$('.schedBtn').forEach(b=>{
+      b.onclick = ()=>{
+        currentScheduleType = b.dataset.sched;
+        $$('.schedBtn').forEach(x=>x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        toast(`Schedule set: ${currentScheduleType}`);
+      };
+    });
+
+    // Run import (simulated)
+    $('#runImport').onclick = ()=>{
+      const checks = validateData();
+      const hasError = checks.some(r=>r.type==='error');
+      if (hasError) { toast('Please fix errors before running'); return; }
+      show($('#progressWrap'));
+      $('#progressBar').style.width = '0%';
+      $('#progressText').textContent = 'Starting...';
+
+      // Save schedule if future time
+      const when = $('#schedTime').value;
+      if (when) {
+        state.schedules.push({ name: 'Import schedule', type: currentScheduleType, when, email: $('#notifyEmail').value || '' });
+        renderSchedules();
+      }
+
+      // Simulate progress
+      let p=0;
+      const total = state.rows.length || 50;
+      const timer = setInterval(()=>{
+        p += Math.random()*20;
+        if (p>=100) p=100;
+        $('#progressBar').style.width = p+'%';
+        $('#progressText').textContent = `Processing rows... ${Math.min(Math.round(p/100*total), total)} / ${total}`;
+        if (p>=100) {
+          clearInterval(timer);
+          setTimeout(()=>{
+            hide($('#progressWrap'));
+            const success = Math.random() > 0.1; // mostly success
+            const rows = state.rows.length;
+            updateStats(success, rows);
+            const entry = {
+              id: Date.now(),
+              time: Date.now(),
+              source: 'CSV / Pasted / Demo',
+              rows: rows,
+              status: success ? 'success' : 'failed'
+            };
+            addHistory(entry);
+            setActive('history');
+            toast(success ? 'Import complete' : 'Import finished with errors');
+          }, 500);
+        }
+      }, 400);
+    };
+
+    // Schedules
+    $('#addSchedule').onclick = ()=>{
+      state.schedules.push({
+        name: 'New schedule',
+        type: 'daily',
+        when: new Date(Date.now()+3600e3).toISOString()
+      });
+      renderSchedules();
+      toast('Schedule added');
+    };
+
+    // History
+    $('#historyFilter').onchange = renderHistory;
+    $('#clearHistory').onclick = ()=>{ state.history = []; renderHistory(); renderDashboardRecent(); toast('History cleared'); };
+
+    // Settings
+    $('#saveSettings').onclick = ()=>{
+      const names = $('#setNameAliases').value.trim();
+      const emails = $('#setEmailAliases').value.trim();
+      if (names) state.settings.nameAliases = names.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+      if (emails) state.settings.emailAliases = emails.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+      toast('Settings saved');
+    };
+    $('#downloadPreview').onclick = ()=>{
+      if (!state.headers.length) return toast('Nothing to download');
+      const rows = [state.headers, ...state.rows];
+      const text = rows.map(r => r.map(v=>{
+        const s = String(v ?? '');
+        return /[,"\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+      }).join(',')).join('\n');
+      const blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'preview.csv';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      toast('Download started');
+    };
+
+    // Dashboard quick button
+    $('#startImportFromDashboard').onclick = ()=> setActive('imports');
+
+    // Sidebar nav
+    $$('#sidebarMenu button').forEach(b=>{
+      b.onclick = ()=> setActive(b.dataset.section);
+    });
+
+    // Publish info (disclosure)
+    $('#publishInfo').onclick = (e)=> { e.preventDefault(); alert('This Canva Code is a front-end demo. External services (like Google Sheets APIs) are not connected here. To publish as a website: Use in a design → Publish website in Canva.'); };
+
+    // Init
+    setActive('dashboard');
+    renderHistory();
+    renderSchedules();
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'971c924e714f2eba',t:'MTc1NTYzNzEzMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
