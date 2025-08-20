@@ -95,6 +95,10 @@
             <span class="w-2 h-2 rounded-full bg-slate-400"></span>
             <span class="text-sm font-medium">Settings</span>
           </button>
+          <button data-section="connections" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-300"></span>
+            <span class="text-sm font-medium">Connections</span>
+          </button>
         </nav>
 
         <div class="mt-6 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -450,6 +454,49 @@
           </div>
         </div>
       </div>
+
+      <!-- Connections -->
+      <div id="section-connections" class="card bg-white/5 rounded-2xl p-6 border border-white/10 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">Connections</h2>
+            <p class="text-slate-300 text-sm">Connect Google Sheets endpoints (placeholders)</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="testSheetsAPI" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm">Test connection</button>
+            <button id="saveConnections" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Save</button>
+          </div>
+        </div>
+
+        <div class="mt-4 grid md:grid-cols-2 gap-4">
+          <div class="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+            <div class="text-sm font-semibold">Google Sheets API</div>
+            <p class="text-slate-300 text-sm mt-1">Add your public API details here. Replace placeholders later.</p>
+            <div class="mt-3 space-y-2 text-sm">
+              <label class="block text-xs text-slate-300">API Key</label>
+              <input id="connApiKey" placeholder="YOUR_API_KEY_HERE" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2" />
+              <label class="block text-xs text-slate-300 mt-3">Spreadsheet ID</label>
+              <input id="connSpreadsheetId" placeholder="YOUR_SPREADSHEET_ID_HERE" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2" />
+              <label class="block text-xs text-slate-300 mt-3">Default Range</label>
+              <input id="connRange" placeholder="Sheet1!A1:D" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2" />
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+            <div class="text-sm font-semibold">List Spreadsheets (optional)</div>
+            <p class="text-slate-300 text-sm mt-1">Paste a read-only listing endpoint or JSON (placeholders)</p>
+            <div class="mt-3 space-y-2 text-sm">
+              <textarea id="connListing" class="w-full h-40 bg-slate-800 border border-slate-700 rounded-lg p-3" placeholder='[{"id":"sheet_1","title":"My Sheet"}]'></textarea>
+              <button id="previewListing" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500">Preview in Library</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-xl border border-slate-800 overflow-hidden">
+          <div class="bg-slate-900/60 px-4 py-3 text-sm font-medium">Last test result</div>
+          <pre id="connResult" class="p-4 text-xs text-slate-300 whitespace-pre-wrap">No test run yet.</pre>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -568,7 +615,7 @@
 
     function setActive(section) {
       state.activeSection = section;
-      ['dashboard','library','imports','schedules','history','settings'].forEach(id=>{
+      ['dashboard','library','imports','schedules','history','settings','connections'].forEach(id=>{
         const el = $('#section-'+id);
         if(!el) return;
         if(id===section) show(el); else hide(el);
@@ -1249,17 +1296,55 @@
       alert('About connections:\n\n1) Google Sheets CSV link works without keys (Publish to web → CSV).\n2) Google Sheets API works with your own API key and public or permitted sheets.\n3) Private sheets or secure keys should use a backend proxy.\n\nIn Canva, click Use in a design → Publish website to share.');
     };
 
+    // Connections actions
+    $('#testSheetsAPI').onclick = async ()=>{
+      const key = $('#connApiKey').value.trim() || 'YOUR_API_KEY_HERE';
+      const sid = $('#connSpreadsheetId').value.trim() || 'YOUR_SPREADSHEET_ID_HERE';
+      const rng = encodeURIComponent($('#connRange').value.trim() || 'Sheet1!A1:D');
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${rng}?key=${key}`;
+      $('#connResult').textContent = 'Testing...';
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        $('#connResult').textContent = text.slice(0, 2000) + (text.length>2000?'\n...':'' );
+      } catch(e) {
+        $('#connResult').textContent = 'Failed to reach API. Check placeholders.';
+      }
+    };
+    $('#saveConnections').onclick = ()=>{
+      const cfg = {
+        apiKey: $('#connApiKey').value.trim() || 'YOUR_API_KEY_HERE',
+        spreadsheetId: $('#connSpreadsheetId').value.trim() || 'YOUR_SPREADSHEET_ID_HERE',
+        range: $('#connRange').value.trim() || 'Sheet1!A1:D'
+      };
+      localStorage.setItem('gs_conn_cfg', JSON.stringify(cfg));
+      toast('Connections saved locally');
+    };
+    $('#previewListing').onclick = ()=>{
+      try {
+        const data = JSON.parse($('#connListing').value || '[]');
+        libraryState.items = data;
+        setActive('library');
+        renderLibrary();
+        toast('Library updated from listing');
+      } catch(e) { toast('Invalid JSON'); }
+    };
+
     // Load persisted
     (function init(){
       try {
         const presets = JSON.parse(localStorage.getItem('import_presets') || '{}'); state.presets = presets; refreshPresetList();
         const settings = JSON.parse(localStorage.getItem('import_settings') || 'null'); if (settings) state.settings = settings;
+        const conn = JSON.parse(localStorage.getItem('gs_conn_cfg') || 'null');
+        if (conn) {
+          $('#connApiKey').value = conn.apiKey || '';
+          $('#connSpreadsheetId').value = conn.spreadsheetId || '';
+          $('#connRange').value = conn.range || '';
+        }
       } catch(e){}
       setActive('dashboard');
       renderHistory();
       renderSchedules();
-      // Prime empty library view
-      const grid = document.createElement('div');
     })();
   </script>
 </html>
